@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-
 module MaitreDTests
     ( tryAcceptBehavesCorrectlyWhenItCanAccept
     , tryAcceptBehavesCorrectlyWhenItCanNotAccept
@@ -11,49 +9,54 @@ import           Data.Time          (LocalTime (..), ZonedTime (..), midnight,
                                      utc)
 import           Data.Time.Calendar (fromGregorian, gregorianMonthLength)
 import           MaitreD
-import           Test.QuickCheck
 
-instance Arbitrary ZonedTime where
-  arbitrary = do
-    y <- choose (1, 9999)
-    m <- choose (1, 12)
-    d <- choose (1, gregorianMonthLength y m)
-    return $ ZonedTime (LocalTime (fromGregorian y m d) midnight) utc
+import           Hedgehog
+import qualified Hedgehog.Gen       as Gen
+import qualified Hedgehog.Range     as Range
 
-genReservation :: Gen Reservation
+genZonedTime :: Monad m => Gen m ZonedTime
+genZonedTime = do
+    y <- Gen.int (Range.constant 1 9999)
+    m <- Gen.int (Range.constant 1 12)
+    d <- Gen.int (Range.constant 1 (gregorianMonthLength (toInteger y) m))
+    return $ ZonedTime (LocalTime (fromGregorian (toInteger y) m d) midnight) utc
+
+genReservation :: Monad m => Gen m Reservation
 genReservation = do
-  bookingDate <- arbitrary
-  Positive qt <- arbitrary
-  trueOrFalse <- arbitrary
+  bookingDate <- genZonedTime
+  positiveQty <- Gen.int (Range.linear 1 100)
+  trueOrFalse <- Gen.bool
   return Reservation
     { date       = bookingDate
-    , quantity   = qt
+    , quantity   = positiveQty
     , isAccepted = trueOrFalse }
 
 sumBy :: Num a => (b -> a) -> [b] -> a
 sumBy x xs = sum $ map x xs
 
-tryAcceptBehavesCorrectlyWhenItCanAccept :: NonNegative Int -> Property
-tryAcceptBehavesCorrectlyWhenItCanAccept (NonNegative excessCapacity) =
-  forAll
-    (liftM2 (,) genReservation $ listOf genReservation)
-    (\(reservation, reservations) ->
-      let capacity =
-            excessCapacity
-            + sumBy quantity reservations
-            + quantity reservation
+tryAcceptBehavesCorrectlyWhenItCanAccept :: Property
+tryAcceptBehavesCorrectlyWhenItCanAccept =
+  property $ do
+    reservation    <- forAll genReservation
+    reservations   <- forAll $ Gen.list (Range.linear 0 100) genReservation
+    excessCapacity <- forAll $ Gen.int  (Range.linear 0 100)
+    let capacity =
+          excessCapacity
+          + sumBy quantity reservations
+          + quantity reservation
 
-          actual = tryAccept capacity reservations reservation
+        actual = tryAccept capacity reservations reservation
 
-      in Just (reservation { isAccepted = True }) == actual)
+    Just (reservation { isAccepted = True }) === actual
 
-tryAcceptBehavesCorrectlyWhenItCanNotAccept :: Positive Int -> Property
-tryAcceptBehavesCorrectlyWhenItCanNotAccept (Positive lackingCapacity) =
-  forAll
-    (liftM2 (,) genReservation $ listOf genReservation)
-    (\(reservation, reservations) ->
-      let capacity = sumBy quantity reservations - lackingCapacity
+tryAcceptBehavesCorrectlyWhenItCanNotAccept :: Property
+tryAcceptBehavesCorrectlyWhenItCanNotAccept =
+  property $ do
+    reservation     <- forAll genReservation
+    reservations    <- forAll $ Gen.list (Range.linear 0 100) genReservation
+    lackingCapacity <- forAll $ Gen.int  (Range.linear 1 100)
+    let capacity = sumBy quantity reservations - lackingCapacity
 
-          actual = tryAccept capacity reservations reservation
+        actual = tryAccept capacity reservations reservation
 
-      in isNothing actual)
+    Nothing === actual

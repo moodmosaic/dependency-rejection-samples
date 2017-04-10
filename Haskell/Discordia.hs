@@ -15,28 +15,16 @@
 -- 3. http://wiki.c2.com/?DoTheSimplestThingThatCouldPossiblyWork
 --
 
-import           Control.Monad   (unless)
+{-# LANGUAGE OverloadedStrings #-}
+
+import           Hedgehog
 import           MaitreDTests
-import           Test.QuickCheck (Property, Result (..), maxSize, maxSuccess,
-                                  property, quickCheckWithResult, stdArgs)
-import           Text.Printf     (printf)
 
-tests :: [(String, Property)]
-tests =
-  [ ("tryAccept behaves correctly when it can accept"
-    , property tryAcceptBehavesCorrectlyWhenItCanAccept)
-
-  , ("tryAccept behaves correctly when it can not accept"
-    , property tryAcceptBehavesCorrectlyWhenItCanNotAccept) ]
-
-main :: IO ()
-main = do
-  let args = stdArgs { maxSuccess = 100, maxSize = 100 }
-      qc t = do
-        c <- quickCheckWithResult args t
-        case c of
-          Success{} -> return True
-          _         -> return False
-      perform (s, t) = printf "%-35s: " s >> qc t
-  n <- length . filter not <$> mapM perform tests
-  unless (n == 0) (error (show n ++ " test(s) failed"))
+main :: IO Bool
+main =
+  checkParallel $ Group "Maître d' tests" [
+      ("tryAccept behaves correctly when it can accept"
+      , tryAcceptBehavesCorrectlyWhenItCanAccept)
+    , ("tryAccept behaves correctly when it can not accept"
+      , tryAcceptBehavesCorrectlyWhenItCanNotAccept)
+    ]
