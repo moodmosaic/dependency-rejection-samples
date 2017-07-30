@@ -19,9 +19,14 @@
 
 import           Hedgehog
 import           MaitreDTests
+import           System.IO
 
 main :: IO Bool
-main =
+main = do
+  -- https://github.com/hedgehogqa/haskell-hedgehog/issues/110#issuecomment-318644107
+  hSetEncoding stdout utf8
+  hSetEncoding stderr utf8
+
   checkParallel $ Group "Maître d' tests" [
       ("tryAccept behaves correctly when it can accept"
       , tryAcceptBehavesCorrectlyWhenItCanAccept)
