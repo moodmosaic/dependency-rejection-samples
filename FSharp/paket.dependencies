@@ -2,6 +2,7 @@ redirects: on
 source https://nuget.org/api/v2
 
 nuget FAKE
-nuget FsCheck.Xunit
+nuget Hedgehog
 nuget Unquote
+nuget xunit.core
 nuget xunit.runner.console

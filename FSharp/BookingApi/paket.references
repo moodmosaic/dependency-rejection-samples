@@ -1,3 +1,4 @@
 xunit.runner.console
-FsCheck.Xunit
+xunit.core
+Hedgehog
 Unquote

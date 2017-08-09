@@ -1,45 +1,52 @@
 ﻿module Ploeh.Samples.MaîtreDTests
 
 open Ploeh.Samples.MaîtreD
-open FsCheck
-open FsCheck.Xunit
+open Hedgehog
+open Xunit
+open System
 open Swensen.Unquote
 
 module Tuple2 =
     let curry f x y = f (x, y)
 
 module Gen =
-    let reservation = gen {
-        let! PositiveInt quantity = Arb.generate
-        let! reservation = Arb.generate
-        return { reservation with Quantity = quantity } }
+    let reservation =
+        gen {
+            let! bookingDate = Gen.dateTime |> Gen.map DateTimeOffset
+            let! positiveQty = Gen.int (Range.linear 1 100)
+            let! trueOrFalse = Gen.bool
 
-[<Property(QuietOnSuccess = true)>]
-let ``tryAccept behaves correctly when it can accept``
-    (NonNegativeInt excessCapacity) =
-    Tuple2.curry id
-    <!> Gen.reservation
-    <*> Gen.listOf Gen.reservation
-    |>  Arb.fromGen |> Prop.forAll <| fun (reservation, reservations) ->
-    let capacity =
-        excessCapacity
-        + (reservations |> List.sumBy (fun x -> x.Quantity))
-        + reservation.Quantity
+            return { Date = bookingDate
+                     Quantity = positiveQty
+                     IsAccepted = trueOrFalse }
+        }
 
-    let actual = tryAccept capacity reservations reservation
+[<Fact>]
+let ``tryAccept behaves correctly when it can accept`` () =
+    property {
+        let! reservation    = Gen.reservation
+        let! reservations   = Gen.list (Range.linear 0 100) Gen.reservation
+        let! excessCapacity = Gen.int  (Range.linear 0 100)
+        let  capacity       = excessCapacity
+                              + (reservations |> List.sumBy (fun x -> x.Quantity))
+                              + reservation.Quantity
 
-    Some { reservation with IsAccepted = true } =! actual
+        let actual = tryAccept capacity reservations reservation
 
-[<Property(QuietOnSuccess = true)>]
-let ``tryAccept behaves correctly when it can't accept``
-    (PositiveInt lackingCapacity) =
-    Tuple2.curry id
-    <!> Gen.reservation
-    <*> Gen.listOf Gen.reservation
-    |>  Arb.fromGen |> Prop.forAll <| fun (reservation, reservations) ->
-    let capacity =
-        (reservations |> List.sumBy (fun x -> x.Quantity)) - lackingCapacity
+        return Some { reservation with IsAccepted = true } = actual
+    }
 
-    let actual = tryAccept capacity reservations reservation
+[<Fact>]
+let ``tryAccept behaves correctly when it can't accept`` () =
+    property {
+        let! reservation     = Gen.reservation
+        let! reservations    = Gen.list (Range.linear 0 100) Gen.reservation
+        let! lackingCapacity = Gen.int  (Range.linear 1 100)
+        let  capacity        = (reservations |> List.sumBy (fun x -> x.Quantity))
+                               - lackingCapacity
 
-    None =! actual
+        let actual = tryAccept capacity reservations reservation
+
+        return None = actual
+    }
+
